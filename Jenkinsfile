@@ -1,43 +1,52 @@
 pipeline {
-
     agent any
 
-    tools {
-        maven 'Maven 3.9.x'
-        jdk 'Java21'
+    options {
+        skipDefaultCheckout(true)
     }
 
     stages {
-
         stage('Checkout') {
             steps {
                 checkout scm
             }
         }
 
-        stage('Build') {
+        stage('Build WAR') {
             steps {
-                sh 'mvn clean package'
+                sh '''
+                    export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-21.0.12.1.1-1.2.el9.x86_64
+                    export PATH="$JAVA_HOME/bin:$PATH"
+
+                    java --version
+                    mvn --version
+                    mvn clean package
+                    test -s target/student-result.war
+                    ls -lh target/student-result.war
+                '''
             }
         }
 
         stage('Archive WAR') {
             steps {
                 archiveArtifacts artifacts: 'target/student-result.war',
-                                     fingerprint: true
+                                 fingerprint: true
             }
         }
 
         stage('Deploy to Tomcat') {
             steps {
-                sh '''
-                    rm -rf /var/lib/tomcat10/webapps/student-result
-                    rm -f /var/lib/tomcat10/webapps/student-result.war
-                    cp target/student-result.war /var/lib/tomcat10/webapps/
-                '''
+                sh 'sudo -n /usr/local/sbin/deploy-student-result.sh'
             }
         }
+    }
 
+    post {
+        success {
+            echo 'Build and Tomcat deployment completed successfully.'
+        }
+        failure {
+            echo 'Pipeline failed. Check Console Output for the failed stage.'
+        }
     }
 }
-
